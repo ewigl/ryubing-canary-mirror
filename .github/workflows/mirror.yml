@@ -1,0 +1,81 @@
+name: Mirror Ryubing Canary Release
+
+on:
+  schedule:
+    - cron: "33 23 * * *"
+  workflow_dispatch:
+
+jobs:
+  mirror-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Fetch Latest Release Data
+        id: fetch_api
+        run: |
+          API_URL="https://git.ryujinx.app/api/v1/repos/Ryubing/Canary/releases/latest"
+          curl -sL "$API_URL" -o latest.json
+
+          TAG_NAME=$(jq -r '.tag_name' latest.json)
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ]; then
+            echo "Failed to fetch tag_name from API."
+            exit 1
+          fi
+
+          echo "Latest tag from upstream is: $TAG_NAME"
+
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+          TARGET_FILE="ryujinx-canary-${TAG_NAME}-win_x64.7z"
+          DOWNLOAD_URL=$(jq -r --arg filename "$TARGET_FILE" '.assets[] | select(.name == $filename) | .browser_download_url' latest.json)
+
+          echo "target_file=$TARGET_FILE" >> "$GITHUB_OUTPUT"
+          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Check Cache / Existing Release
+        id: check_status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ steps.fetch_api.outputs.tag_name }}"
+
+          if gh release view "$TAG_NAME" &>/dev/null; then
+            echo "Release $TAG_NAME already exists in this repository. Skipping..."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "New release $TAG_NAME found. Proceeding to download and mirror."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Asset
+        if: steps.check_status.outputs.skip == 'false'
+        run: |
+          DOWNLOAD_URL="${{ steps.fetch_api.outputs.download_url }}"
+          TARGET_FILE="${{ steps.fetch_api.outputs.target_file }}"
+
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" == "null" ]; then
+            echo "Error: Asset $TARGET_FILE not found in the release."
+            exit 1
+          fi
+
+          echo "Downloading $TARGET_FILE from $DOWNLOAD_URL..."
+          curl -L -o "$TARGET_FILE" "$DOWNLOAD_URL"
+
+      - name: Create Release and Upload Asset
+        if: steps.check_status.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ steps.fetch_api.outputs.tag_name }}"
+          TARGET_FILE="${{ steps.fetch_api.outputs.target_file }}"
+
+          echo "Creating GitHub Release and uploading file..."
+
+          gh release create "$TAG_NAME" "$TARGET_FILE" \
+            --title "$TAG_NAME" \
+            --notes "Ryubing Canary Windows x64 v$TAG_NAME."
