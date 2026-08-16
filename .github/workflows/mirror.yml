@@ -80,3 +80,19 @@ jobs:
           gh release create "$TAG_NAME" "$TARGET_FILE" \
             --title "$TAG_NAME" \
             --notes "Ryubing Canary Windows x64 v$TAG_NAME."
+
+      - name: Keep Latest 5 Releases Only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OLD_RELEASES=$(gh release list --limit 99 | awk 'NR>5 {print $3}')
+
+          if [ -z "$OLD_RELEASES" ]; then
+            echo "No old releases to delete."
+            exit 0
+          fi
+
+          for tag in $OLD_RELEASES; do
+            echo "Deleting release and tag: $tag"
+            gh release delete "$tag" --cleanup-tag -y
+          done
