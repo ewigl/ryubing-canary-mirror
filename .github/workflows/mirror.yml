@@ -85,14 +85,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          OLD_RELEASES=$(gh release list --limit 99 | awk 'NR>5 {print $3}')
+          OLD_RELEASES=$(gh release list --limit 99 --json tagName --jq '.[5:] | .[].tagName')
 
           if [ -z "$OLD_RELEASES" ]; then
             echo "No old releases to delete."
             exit 0
           fi
 
-          for tag in $OLD_RELEASES; do
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
             echo "Deleting release and tag: $tag"
             gh release delete "$tag" --cleanup-tag -y
-          done
+          done <<< "$OLD_RELEASES"
