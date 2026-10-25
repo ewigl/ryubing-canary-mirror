@@ -81,11 +81,11 @@ jobs:
             --title "$TAG_NAME" \
             --notes "Ryubing Canary Windows x64 v$TAG_NAME."
 
-      - name: Keep Latest 5 Releases Only
+      - name: Keep Latest 3 Releases Only
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          OLD_RELEASES=$(gh release list --limit 99 --json tagName --jq '.[5:] | .[].tagName')
+          OLD_RELEASES=$(gh release list --limit 99 --json tagName --jq '.[3:] | .[].tagName')
 
           if [ -z "$OLD_RELEASES" ]; then
             echo "No old releases to delete."
