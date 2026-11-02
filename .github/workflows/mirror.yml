@@ -2,7 +2,7 @@ name: Mirror Ryubing Canary Release
 
 on:
   schedule:
-    # - cron: "33 11 * * *"
+    - cron: "33 11 * * *"
     - cron: "33 23 * * *"
   workflow_dispatch:
 
